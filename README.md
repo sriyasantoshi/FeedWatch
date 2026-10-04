@@ -1,4 +1,4 @@
-# FeedWatch 🛰️📈
+# FeedWatch 
 
 **FeedWatch** is a high-performance market-data feed simulator and receiver implemented in Python using `asyncio` and the `struct` module. It simulates a low-latency sequenced UDP market-data feed subject to configurable network failures (packet loss, packet reordering, and packet duplication) with sequence gap detection, automatic recovery over a TCP side-channel, deduplication, reordering, explicit backpressure handling, and microsecond-level latency histogram profiling.
 
