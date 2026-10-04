@@ -56,7 +56,7 @@ Struct: `!H` (2 Bytes)
 
 ## Gap Detection, Reordering & Recovery Workflow
 
-1. **UDP Ingestion**: Receiver listens synchronously via `asyncio.DatagramProtocol` with an enlarged OS socket receive buffer (`SO_RCVBUF = 2MB`).
+1. **UDP Ingestion**: Receiver listens asynchronously via `asyncio.DatagramProtocol` with an enlarged OS socket receive buffer (`SO_RCVBUF = 2MB`).
 2. **Gap Detection**: When message `seq` arrives:
    - If `seq == expected_seq`: Processed immediately, `expected_seq` advances by 1.
    - If `seq < expected_seq`: Identified as a duplicate; dropped immediately and logged in duplicate metrics.
@@ -68,7 +68,7 @@ Struct: `!H` (2 Bytes)
 
 ## Explicit Backpressure Handling
 
-To guarantee stability under extreme network degradation or slow application consumers:
+To keep memory bounded under network degradation or slow application consumers:
 
 1. **Bounded Processing Queue**: `asyncio.Queue(maxsize=10000)` enforces application layer backpressure. If processing falls behind, `put_nowait` triggers `backpressure_drops` metric tracking rather than unbounded memory growth.
 2. **Reorder Buffer Cap (`max_reorder_gap`)**: If a sequence gap is never filled (e.g., due to simulator history truncation), `reorder_buffer` drops the missing gap once buffer size exceeds `max_reorder_gap` (default 5,000), resetting `expected_seq` to prevent memory exhaustion.
@@ -103,12 +103,12 @@ python -m pytest tests -v
 ### Latency Measurement Method
 - **Timestamping**: Each message header includes `timestamp_ns` recorded by the publisher using `time.perf_counter_ns()`.
 - **Receive Time**: As datagrams hit `datagram_received()`, the receiver captures $t_{recv} = \text{time.perf_counter\_ns()}$.
-- **Processing Latency**: Calculated as $(t_{recv} - t_{send}) / 1000.0$ in microseconds ($\mu s$).
+- **End-to-End Delay**: Calculated as $(t_{recv} - t_{send}) / 1000.0$ in microseconds ($\mu s$). This is the delay from message creation to the receiver's UDP callback, not receiver parsing time.
 - **Histogram**: Recorded into a logarithmic bucketed histogram (`LatencyHistogram`) supporting precision quantile extraction (p50, p90, p95, p99, p99.9, p99.99).
 
 ### Benchmark Results
 
-These latency figures measure from message creation in the simulator to the receiver's UDP callback, so they include publisher batching and local event-loop/socket scheduling and queueing, not just receiver parsing; loss and reordering add recovery waits. The roughly 2,600-3,000 msg/s shown here reflects the simulator's publish loop and this benchmark setup, not a measured maximum receiver capacity.
+These latency figures measure from message creation in the simulator to the receiver's UDP callback, so they include time in the publisher's send loop and local event-loop/socket scheduling and queueing, not just receiver parsing; loss and reordering add recovery waits. The roughly 2,600-3,000 msg/s shown here reflects the simulator's publish loop and this benchmark setup, not a measured maximum receiver capacity.
 
 #### Scenario A: Clean Network Feed (2,000 Messages, 0% Failures)
 ```
@@ -177,6 +177,14 @@ These latency figures measure from message creation in the simulator to the rece
  Max Latency     :   87735.20 us (  87.735 ms)
 ============================================================
 ```
+
+---
+
+## Known Limitations
+
+- **Unfilled gaps are skipped.** If a gap is never filled and the reorder buffer exceeds `max_reorder_gap`, the missing range is dropped and `expected_seq` is reset, so those messages are skipped rather than delivered.
+- **Bounded history.** The simulator keeps only a ring buffer of recent payloads, so gaps older than that history cannot be retransmitted.
+- **Single process.** The simulator and receiver run in one process on one machine, so these numbers do not reflect a real network.
 
 ---
 
