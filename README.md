@@ -1,6 +1,6 @@
 # FeedWatch 🛰️📈
 
-**FeedWatch** is a high-performance market-data feed simulator and receiver implemented in Python using `asyncio` and the `struct` module. It simulates a low-latency sequenced UDP market-data feed subject to configurable network failures (packet loss, packet reordering, and packet duplication) with sequence gap detection, automatic recovery over a TCP side-channel, deduplication, reordering, explicit backpressure handling, and microsecond-level latency histogram profiling.
+**FeedWatch** is a Python prototype of a market-data feed simulator and receiver, implemented with `asyncio` and the `struct` module. It simulates a sequenced UDP market-data feed subject to configurable network failures (packet loss, packet reordering, and packet duplication) with sequence gap detection, recovery over a TCP side-channel, deduplication, reordering, explicit backpressure handling, and latency histogram measurement.
 
 ---
 
@@ -108,6 +108,8 @@ python -m pytest tests -v
 
 ### Benchmark Results
 
+These latency figures measure from message creation in the simulator to the receiver's UDP callback, so they include publisher batching and local event-loop/socket scheduling and queueing, not just receiver parsing; loss and reordering add recovery waits. The roughly 2,600-3,000 msg/s shown here reflects the simulator's publish loop and this benchmark setup, not a measured maximum receiver capacity.
+
 #### Scenario A: Clean Network Feed (2,000 Messages, 0% Failures)
 ```
 ============================================================
@@ -178,9 +180,9 @@ python -m pytest tests -v
 
 ---
 
-## Limits of Measuring Latency in Python
+## Limits of This Python Prototype's Latency Measurements
 
-When profiling microsecond-level market-data feed latency in Pure Python, several inherent language runtime and operating system boundaries must be considered:
+These local prototype measurements should not be read as microsecond-level receiver processing times. Several Python runtime and operating system boundaries affect the measured end-to-end delay:
 
 1. **Global Interpreter Lock (GIL) & Context Switching**:
    - Python's GIL prevents multi-threaded execution of CPU-bound byte parsing or queue processing on multiple CPU cores simultaneously. Event loop scheduling overhead occurs whenever coroutines yield control (`await asyncio.sleep(0)`).
