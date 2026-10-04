@@ -179,6 +179,7 @@ These latency figures measure from message creation in the simulator to the rece
 ```
 
 ---
+Note: The gap (653) and duplicate (630) counts exceed the 5% simulation rate because a single missing sequence triggers gap detection across multiple out-of-order arrivals, and reordered UDP packets arriving after a TCP retransmission request has already been fulfilled create secondary duplicates.
 
 ## Known Limitations
 
